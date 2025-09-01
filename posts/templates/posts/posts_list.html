@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container">
+    <h1>Список постов</h1>
+
+    {% if posts %}
+        <div class="row">
+            {% for post in posts %}
+            <div class="col-md-6 mb-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ post.title }}</h5>
+
+                        {% if post.image %}
+                            {% if not post.is_paid or post.user_has_access %}
+                                <img src="{{ post.image.url }}" alt="{{ post.title }}"
+                                     class="img-fluid mb-3" style="height: 200px; object-fit: cover;">
+                            {% else %}
+                                <div class="alert alert-warning">
+                                    <i class="bi bi-lock"></i> Требуется подписка для просмотра изображения
+                                </div>
+                            {% endif %}
+                        {% endif %}
+
+                        <p class="card-text">{{ post.content|truncatewords:30 }}</p>
+
+                        <div class="d-flex justify-content-between align-items-center">
+                            <a href="{% url 'posts:post_detail' post.pk %}" class="btn btn-primary btn-sm">
+                                Читать далее
+                            </a>
+                            <span class="badge {% if post.is_paid %}bg-warning{% else %}bg-success{% endif %}">
+                                {% if post.is_paid %}Платный{% else %}Бесплатный{% endif %}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="card-footer text-muted">
+                        <small>
+                            Автор: {{ post.author.username|default:"Неизвестен" }} |
+                            {{ post.created_at|date:"d.m.Y H:i" }}
+                        </small>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> Пока нет ни одного поста.
+            <a href="{% url 'posts:post_create' %}" class="alert-link">Создайте первый!</a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

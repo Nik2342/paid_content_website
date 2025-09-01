@@ -1,0 +1,60 @@
+{% load static %}
+
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Publish Paid Content{% endblock %}</title>
+    <link href="{% static 'css/bootstrap.min.css' %}" rel="stylesheet">
+</head>
+
+<body class="d-flex flex-column min-vh-100">
+    <!-- Навигация -->
+    <nav class="navbar navbar-expand-lg navbar-dark" style="background-color: #172EA6;">
+        <div class="container">
+            <a class="navbar-brand" href="{% url 'posts:posts_list' %}">
+                <strong>PaidContent</strong>
+            </a>
+
+            <div class="collapse navbar-collapse" id="navbarMain">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'posts:posts_list' %}">Главная</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'posts:post_create' %}">Создать пост</a>
+                    </li>
+                </ul>
+
+                <div class="d-flex">
+                    {% if user.is_authenticated %}
+                        <form method="post" action="{% url 'users:logout' %}" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-outline-light">Выйти</button>
+                        </form>
+                    {% else %}
+                        <a href="{% url 'users:login' %}" class="btn btn-outline-light me-2">Вход</a>
+                        <a href="{% url 'users:register' %}" class="btn btn-light">Регистрация</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="flex-grow-1 py-4">
+        <div class="container">
+            {% block content %}
+            {% endblock %}
+        </div>
+    </main>
+
+    <footer class="bg-dark text-white py-3 mt-auto">
+        <div class="container text-center">
+            <p>&copy; 2024 Publish Paid Content. Все права защищены.</p>
+        </div>
+    </footer>
+
+    <script src="{% static 'js/bootstrap.bundle.min.js' %}"></script>
+</body>
+</html>
