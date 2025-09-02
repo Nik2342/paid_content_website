@@ -11,7 +11,9 @@ class User(AbstractUser):
         null=True,
         help_text="Введите номер телефона",
     )
-    image = models.ImageField(upload_to="users/", verbose_name="Изображение")
+    image = models.ImageField(
+        upload_to="users/", verbose_name="Изображение", blank=True, null=True
+    )
     has_paid_subscription = models.BooleanField(default=False, verbose_name="Подписка")
 
     USERNAME_FIELD = "phone"

@@ -14,6 +14,7 @@ djangorestframework = "^3.16.1"
 djangorestframework-simplejwt = "^5.5.1"
 black = "^25.1.0"
 pillow = "^11.3.0"
+stripe = "^12.5.0"
 
 
 [build-system]
