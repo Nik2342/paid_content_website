@@ -6,10 +6,23 @@ from django.views.generic import (
     DeleteView,
     DetailView,
 )
+from django.http import JsonResponse
+from django.shortcuts import redirect
 from rest_framework.reverse import reverse_lazy
-
 from posts.forms import PostForm
 from posts.models import Post
+from users.permissions import check_jwt_authentication
+
+
+class JWTAuthMixin:
+
+    def dispatch(self, request, *args, **kwargs):
+        # Проверяем аутентификацию через JWT или Django сессии
+        if not check_jwt_authentication(request):
+            if self.request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return JsonResponse({"error": "Authentication required"}, status=401)
+            return redirect(f"/users/login/?next={request.path}")
+        return super().dispatch(request, *args, **kwargs)
 
 
 class PostListView(ListView):
@@ -31,7 +44,8 @@ class PostListView(ListView):
         if not post.is_paid:
             return True
 
-        if not self.request.user.is_authenticated:
+        # Используем нашу функцию проверки аутентификации
+        if not check_jwt_authentication(self.request):
             return False
 
         return self.request.user.has_paid_subscription
@@ -54,25 +68,24 @@ class PostDetailView(DetailView):
         if not post.is_paid:
             return True
 
-        if not self.request.user.is_authenticated:
+        if not check_jwt_authentication(self.request):
             return False
 
         return getattr(self.request.user, "has_paid_subscription", False)
 
 
-class PostCreateView(LoginRequiredMixin, CreateView):
+class PostCreateView(JWTAuthMixin, CreateView):
     model = Post
     form_class = PostForm
     template_name = "posts/post_form.html"
     success_url = reverse_lazy("posts:posts_list")
-    login_url = "/users/login/"
 
     def form_valid(self, form):
         form.instance.author = self.request.user
         return super().form_valid(form)
 
 
-class PostUpdateView(UpdateView):
+class PostUpdateView(JWTAuthMixin, UpdateView):
     model = Post
     form_class = PostForm
     template_name = "posts/post_form.html"
@@ -82,7 +95,7 @@ class PostUpdateView(UpdateView):
         return Post.objects.filter(author=self.request.user)
 
 
-class PostDeleteView(DeleteView):
+class PostDeleteView(JWTAuthMixin, DeleteView):
     model = Post
     template_name = "posts/post_confirm_delete.html"
     success_url = reverse_lazy("posts:posts_list")

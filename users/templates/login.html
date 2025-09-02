@@ -5,38 +5,67 @@
     <div class="col-md-6">
       <div class="card">
         <div class="card-header">
-          <h4 class="text-center">Вход</h4>
+          <h4 class="text-center">Вход в систему</h4>
         </div>
         <div class="card-body">
           <form id="loginForm">
             <div class="mb-3">
               <label for="phone" class="form-label">Телефон</label>
-              <input type="text" class="form-control" id="phone" name="phone" required>
+              <input type="text" class="form-control" id="phone" name="phone" required
+                     placeholder="+79123456789">
             </div>
             <div class="mb-3">
               <label for="password" class="form-label">Пароль</label>
-              <input type="password" class="form-control" id="password" name="password" required>
+              <input type="password" class="form-control" id="password" name="password" required
+                     placeholder="Введите ваш пароль">
             </div>
-            <button type="submit" class="btn btn-primary w-100">Войти</button>
+            <button type="submit" class="btn btn-primary w-100">
+              <span id="submitText">Войти</span>
+              <div id="spinner" class="spinner-border spinner-border-sm" role="status" style="display: none;">
+                <span class="visually-hidden">Загрузка...</span>
+              </div>
+            </button>
           </form>
+
+
           <div id="errorMessage" class="alert alert-danger mt-3" style="display: none;"></div>
+          <div id="successMessage" class="alert alert-success mt-3" style="display: none;">
+            Успешный вход!
+          </div>
         </div>
       </div>
     </div>
   </div>
 </div>
 
+<style>
+.spinner-border {
+    margin-left: 8px;
+}
+</style>
+
 <script>
 document.getElementById('loginForm').addEventListener('submit', async function(e) {
     e.preventDefault();
 
+    const submitText = document.getElementById('submitText');
+    const spinner = document.getElementById('spinner');
+    const submitButton = e.target.querySelector('button[type="submit"]');
+
+    submitText.textContent = 'Вход...';
+    spinner.style.display = 'inline-block';
+    submitButton.disabled = true;
+
+    document.getElementById('errorMessage').style.display = 'none';
+    document.getElementById('successMessage').style.display = 'none';
+
     const formData = {
-        phone: document.getElementById('phone').value,  // ← ИСПРАВЛЕНО
+        phone: document.getElementById('phone').value,
         password: document.getElementById('password').value
     };
 
     try {
-        const response = await fetch('{% url "users:login" %}', {
+        const response = await fetch('{% url "users:api_login" %}', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -45,18 +74,62 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
         });
 
         if (response.ok) {
+          const data = await response.json();
+
+        // Сохраняем в localStorage
+          localStorage.setItem('access_token', data.access);
+          localStorage.setItem('refresh_token', data.refresh);
+
+        // Сохраняем в cookies для Django
+          document.cookie = `access_token=${data.access}; path=/; max-age=86400`; // 24 часа
+          document.cookie = `refresh_token=${data.refresh}; path=/; max-age=604800`; // 7 дней
+
+           window.location.href = '{% url "posts:posts_list" %}';
+        }
+
+
+
+        if (response.ok) {
             const data = await response.json();
+
             localStorage.setItem('access_token', data.access);
             localStorage.setItem('refresh_token', data.refresh);
-            window.location.href = '{% url "posts:posts_list" %}';
+
+            document.getElementById('successMessage').style.display = 'block';
+
+            setTimeout(() => {
+                window.location.href = '{% url "posts:posts_list" %}';
+            }, 1000);
+
         } else {
-            const error = await response.json();
-            document.getElementById('errorMessage').textContent = error.detail || 'Ошибка входа';
+            const errorData = await response.json();
+            let errorMessage = 'Ошибка входа';
+
+            if (errorData.detail) {
+                errorMessage = errorData.detail;
+            } else if (errorData.error) {
+                errorMessage = errorData.error;
+            }
+
+            document.getElementById('errorMessage').textContent = errorMessage;
             document.getElementById('errorMessage').style.display = 'block';
         }
+
     } catch (error) {
-        document.getElementById('errorMessage').textContent = 'Ошибка соединения';
+        console.error('Ошибка:', error);
+        document.getElementById('errorMessage').textContent = 'Ошибка соединения с сервером';
         document.getElementById('errorMessage').style.display = 'block';
+
+    } finally {
+        submitText.textContent = 'Войти';
+        spinner.style.display = 'none';
+        submitButton.disabled = false;
+    }
+});
+
+document.getElementById('password').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        document.getElementById('loginForm').dispatchEvent(new Event('submit'));
     }
 });
 </script>
