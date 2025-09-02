@@ -44,7 +44,7 @@
 
                                 {% if user.is_authenticated %}
                                     <div class="mt-3">
-                                        <a href="{% url 'payments:subscribe' %}" class="btn btn-success">
+                                        <a href="{% url 'users:subscribe' %}" class="btn btn-success">
                                             <i class="bi bi-credit-card"></i> Оформить подписку
                                         </a>
                                     </div>
@@ -106,4 +106,41 @@
         font-size: 0.8rem;
     }
 </style>
+
+<script>
+async function createPayment() {
+    const accessToken = localStorage.getItem('access_token');
+
+    if (!accessToken) {
+        alert('Пожалуйста, войдите в систему для оформления подписки');
+        window.location.href = '{% url "users:login" %}';
+        return;
+    }
+
+    try {
+        const response = await fetch('{% url "users:api_payment_create" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`
+            },
+            body: JSON.stringify({
+                amount: 1000
+            })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            // Перенаправляем на страницу оплаты Stripe
+            window.location.href = data.payment_link;
+        } else {
+            const errorData = await response.json();
+            alert('Ошибка: ' + (errorData.error || 'Неизвестная ошибка'));
+        }
+    } catch (error) {
+        alert('Ошибка соединения: ' + error.message);
+    }
+}
+</script>
+
 {% endblock %}

@@ -1,0 +1,141 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container">
+  <div class="row justify-content-center">
+    <div class="col-md-8">
+      <div class="card">
+        <div class="card-header">
+          <h4 class="text-center">Оформление подписки</h4>
+        </div>
+        <div class="card-body">
+
+          {% if has_subscription %}
+          <div class="alert alert-success text-center">
+            <h5>✅ У вас уже есть активная подписка!</h5>
+            <p>Вы можете получить доступ ко всем платным материалам.</p>
+          </div>
+          {% else %}
+
+          <div class="text-center mb-4">
+            <h5>Премиум подписка</h5>
+            <p class="text-muted">Получите доступ ко всем платным материалам</p>
+            <h3 class="text-primary">{{ amount }} ₽</h3>
+          </div>
+
+          <div class="d-grid gap-2">
+            <button id="subscribeBtn" class="btn btn-primary btn-lg">
+              <span id="submitText">Оформить подписку</span>
+              <div id="spinner" class="spinner-border spinner-border-sm" role="status" style="display: none;">
+                <span class="visually-hidden">Загрузка...</span>
+              </div>
+            </button>
+          </div>
+
+          <div id="paymentLink" class="mt-3 text-center" style="display: none;">
+            <p>Перейдите по ссылке для оплаты:</p>
+            <a id="paymentUrl" href="#" target="_blank" class="btn btn-outline-success">
+              Перейти к оплате
+            </a>
+          </div>
+
+          {% endif %}
+
+          <div id="errorMessage" class="alert alert-danger mt-3" style="display: none;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.spinner-border {
+    margin-left: 8px;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const subscribeBtn = document.getElementById('subscribeBtn');
+    const errorDiv = document.getElementById('errorMessage');
+    const paymentLinkDiv = document.getElementById('paymentLink');
+    const paymentUrl = document.getElementById('paymentUrl');
+
+    if (subscribeBtn) {
+        subscribeBtn.addEventListener('click', async function() {
+            const submitText = document.getElementById('submitText');
+            const spinner = document.getElementById('spinner');
+
+            // Показываем загрузку
+            submitText.textContent = 'Создание платежа...';
+            spinner.style.display = 'inline-block';
+            subscribeBtn.disabled = true;
+            errorDiv.style.display = 'none';
+            paymentLinkDiv.style.display = 'none';
+
+            try {
+                // Получаем access token из localStorage
+                const accessToken = localStorage.getItem('access_token');
+
+                if (!accessToken) {
+                    showError('Требуется авторизация. Пожалуйста, войдите снова.');
+                    resetButton();
+                    return;
+                }
+
+                const response = await fetch('{% url "users:api_payment_create" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify({})
+                });
+
+                const responseData = await response.json();
+
+                if (response.ok) {
+                    // Показываем ссылку для оплаты
+                    paymentUrl.href = responseData.payment_link;
+                    paymentUrl.textContent = 'Оплатить ' + responseData.amount / 100 + ' ₽';
+                    paymentLinkDiv.style.display = 'block';
+
+                    submitText.textContent = 'Оплатить';
+                    spinner.style.display = 'none';
+
+                } else {
+                    let errorMessage = 'Ошибка создания платежа';
+                    if (responseData.detail) errorMessage = responseData.detail;
+                    else if (responseData.error) errorMessage = responseData.error;
+
+                    showError(errorMessage);
+                    resetButton();
+                }
+
+            } catch (error) {
+                showError('Ошибка соединения с сервером');
+                resetButton();
+            }
+        });
+    }
+
+    function showError(message) {
+        errorDiv.textContent = message;
+        errorDiv.style.display = 'block';
+    }
+
+    function resetButton() {
+        if (document.getElementById('submitText')) {
+            document.getElementById('submitText').textContent = 'Оформить подписку';
+        }
+        if (document.getElementById('spinner')) {
+            document.getElementById('spinner').style.display = 'none';
+        }
+        if (subscribeBtn) {
+            subscribeBtn.disabled = false;
+        }
+    }
+});
+</script>
+{% endblock %}

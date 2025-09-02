@@ -17,7 +17,6 @@ from users.permissions import check_jwt_authentication
 class JWTAuthMixin:
 
     def dispatch(self, request, *args, **kwargs):
-        # Проверяем аутентификацию через JWT или Django сессии
         if not check_jwt_authentication(request):
             if self.request.headers.get("X-Requested-With") == "XMLHttpRequest":
                 return JsonResponse({"error": "Authentication required"}, status=401)
@@ -44,7 +43,6 @@ class PostListView(ListView):
         if not post.is_paid:
             return True
 
-        # Используем нашу функцию проверки аутентификации
         if not check_jwt_authentication(self.request):
             return False
 

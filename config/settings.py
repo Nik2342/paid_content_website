@@ -123,3 +123,5 @@ MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 LOGIN_REDIRECT_URL = "posts:posts_list"
 LOGOUT_REDIRECT_URL = "posts:posts_list"
 LOGIN_URL = "users:login"
+
+STRIPE_API_KEY = os.getenv("STRIPE_API_KEY")
