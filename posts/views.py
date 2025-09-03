@@ -1,4 +1,6 @@
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.http import JsonResponse
+from django.shortcuts import redirect
 from django.views.generic import (
     CreateView,
     UpdateView,
@@ -8,6 +10,8 @@ from django.views.generic import (
 )
 
 from rest_framework.reverse import reverse_lazy
+from rest_framework_simplejwt.authentication import JWTAuthentication
+
 from posts.forms import PostForm
 from posts.models import Post
 
@@ -57,25 +61,63 @@ class PostDetailView(DetailView):
         )
 
 
-class PostCreateView(LoginRequiredMixin, CreateView):
+class PostCreateView(CreateView):
     model = Post
     form_class = PostForm
     template_name = "posts/post_form.html"
     success_url = reverse_lazy("posts:posts_list")
+
+    def authenticate_user(self, request):
+        try:
+            jwt_auth = JWTAuthentication()
+            auth_result = jwt_auth.authenticate(request)
+            return auth_result[0] if auth_result else None
+        except:
+            return None
 
     def form_valid(self, form):
-        form.instance.author = self.request.user
+        user = self.authenticate_user(self.request)
+
+        if not user:
+            return self.handle_no_permission()
+
+        form.instance.author = user
         return super().form_valid(form)
 
+    def handle_no_permission(self):
+        if self.request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'error': 'Authentication required'}, status=401)
+        return redirect('users:login?next=' + self.request.path)
 
-class PostUpdateView(LoginRequiredMixin, UpdateView):
+
+class PostUpdateView(UpdateView):
     model = Post
     form_class = PostForm
     template_name = "posts/post_form.html"
     success_url = reverse_lazy("posts:posts_list")
 
+    def authenticate_user(self, request):
+        try:
+            jwt_auth = JWTAuthentication()
+            auth_result = jwt_auth.authenticate(request)
+            return auth_result[0] if auth_result else None
+        except:
+            return None
+
+    def dispatch(self, request, *args, **kwargs):
+        user = self.authenticate_user(request)
+        if not user:
+            return self.handle_no_permission()
+        return super().dispatch(request, *args, **kwargs)
+
     def get_queryset(self):
-        return Post.objects.filter(author=self.request.user)
+        user = self.authenticate_user(self.request)
+        return Post.objects.filter(author=user) if user else Post.objects.none()
+
+    def handle_no_permission(self):
+        if self.request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'error': 'Authentication required'}, status=401)
+        return redirect('users:login?next=' + self.request.path)
 
 
 class PostDeleteView(LoginRequiredMixin, DeleteView):
@@ -85,3 +127,6 @@ class PostDeleteView(LoginRequiredMixin, DeleteView):
 
     def get_queryset(self):
         return Post.objects.filter(author=self.request.user)
+
+
+

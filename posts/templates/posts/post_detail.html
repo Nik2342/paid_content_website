@@ -15,7 +15,7 @@
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <div>
                             <small class="text-muted">
-                                Автор: {{ post.author.username|default:"Неизвестен" }} |
+                                Автор: {{ post.author.phone|default:"Неизвестен" }} |
                                 {{ post.created_at|date:"d.m.Y H:i" }}
                             </small>
                             {% if post.is_paid %}
@@ -24,31 +24,131 @@
                         </div>
                     </div>
 
-                    <!-- Информация для автора -->
-
                     {% if post.image %}
-                        {% if not post.is_paid or user_has_access or user == post.author %}
-                            <img src="{{ post.image.url }}" alt="{{ post.title }}"
-                                class="img-fluid rounded mb-4" style="max-height: 400px; object-fit: cover;">
-                        {% endif %}
+                        <img src="{{ post.image.url }}" alt="{{ post.title }}"
+                            class="img-fluid rounded mb-4" style="max-height: 400px; object-fit: cover;">
                     {% endif %}
 
-
                     <div class="post-content">
-                        {% if not post.is_paid or user_has_access or user == post.author %}
+                        {% if not post.is_paid %}
                             <p>{{ post.content|linebreaks }}</p>
-  {% else %}
-    <div class="alert alert-info">
-        <h5><i class="bi bi-credit-card"></i> Платный контент</h5>
-        <p>Для просмотра полного содержимого необходимо оформить подписку.</p>
+                        {% else %}
+                            <div id="paidContent" style="display: none;">
+                                <p>{{ post.content|linebreaks }}</p>
+                            </div>
+                            <div id="paywall">
+                                <div class="alert alert-info">
+                                    <h5><i class="bi bi-credit-card"></i> Платный контент</h5>
+                                    <p>Для просмотра полного содержимого необходимо оформить подписку.</p>
+                                    <div id="authSection"></div>
+                                </div>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
 
-        {% if user.is_authenticated %}
-            <div class="mt-3">
-                <a href="{% url 'users:subscribe' %}" class="btn btn-success">
-                    <i class="bi bi-credit-card"></i> Оформить подписку
-                </a>
+
+<div class="d-flex gap-2 pt-3">
+    <!-- Убираем проверку username/phone - только ID -->
+    {% if user.is_authenticated and user.id == post.author.id %}
+    <div>
+        <a href="{% url 'posts:post_update' post.pk %}" class="btn btn-primary">
+            <i class="bi bi-pencil"></i> Редактировать
+        </a>
+        <a href="{% url 'posts:post_delete' post.pk %}" class="btn btn-danger">
+            <i class="bi bi-trash"></i> Удалить
+        </a>
+    </div>
+    {% endif %}
+
+    <a href="{% url 'posts:posts_list' %}" class="btn btn-secondary ms-auto">
+        <i class="bi bi-arrow-left"></i> Назад к списку
+    </a>
+</div>
             </div>
-        {% else %}
+        </div>
+    </div>
+</div>
+
+<style>
+.post-content {
+    font-size: 1.1rem;
+    line-height: 1.6;
+}
+.card {
+    border: none;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+.card-header {
+    background-color: #172EA6;
+    color: white;
+    border-bottom: none;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+    {% if post.is_paid %}
+    // Проверяем подписку для платного контента
+    const hasAccess = await checkSubscription();
+
+    if (hasAccess) {
+        // Показываем контент
+        document.getElementById('paidContent').style.display = 'block';
+        document.getElementById('paywall').style.display = 'none';
+    } else {
+        // Показываем paywall
+        showPaywall();
+    }
+    {% endif %}
+});
+
+async function checkSubscription() {
+    try {
+        const accessToken = localStorage.getItem('access_token');
+        if (!accessToken) return false;
+
+        const response = await fetch('{% url "users:user_profile" %}', {
+            headers: {
+                'Authorization': 'Bearer ' + accessToken
+            }
+        });
+
+        if (response.ok) {
+            const userData = await response.json();
+            return userData.has_paid_subscription;
+        }
+        return false;
+    } catch (error) {
+        console.error('Ошибка проверки подписки:', error);
+        return false;
+    }
+}
+
+function showPaywall() {
+    const authSection = document.getElementById('authSection');
+    const accessToken = localStorage.getItem('access_token');
+
+    if (accessToken) {
+        // Пользователь аутентифицирован, но нет подписки
+        authSection.innerHTML = `
+            <div class="mt-3">
+                <!-- ЗАМЕНЯЕМ ССЫЛКУ НА КНОПКУ С ОБРАБОТЧИКОМ -->
+                <button id="subscribeButton" class="btn btn-success">
+                    <i class="bi bi-credit-card"></i> Оформить подписку
+                </button>
+                <button onclick="checkSubscription().then(hasSub => { if(hasSub) location.reload() })"
+                        class="btn btn-outline-secondary ms-2">
+                    <i class="bi bi-arrow-clockwise"></i> Проверить статус
+                </button>
+            </div>
+        `;
+
+        // Добавляем обработчик для кнопки
+        document.getElementById('subscribeButton').addEventListener('click', handleSubscribe);
+    } else {
+        // Пользователь не аутентифицирован
+        authSection.innerHTML = `
             <div class="mt-3">
                 <a href="{% url 'users:login' %}?next={{ request.path }}" class="btn btn-primary me-2">
                     <i class="bi bi-box-arrow-in-right"></i> Войти
@@ -57,54 +157,40 @@
                     <i class="bi bi-person-plus"></i> Зарегистрироваться
                 </a>
             </div>
-        {% endif %}
-    </div>
-{% endif %}
-                    </div>
-                </div>
-
-                <!-- Кнопки действий -->
-                <div class="d-flex gap-2 pt-3">
-                    {% if user == post.author %}
-                        <!-- Кнопки для автора -->
-                        <a href="{% url 'posts:post_update' post.pk %}" class="btn btn-primary">
-                            <i class="bi bi-pencil"></i> Редактировать
-                        </a>
-                        <a href="{% url 'posts:post_delete' post.pk %}" class="btn btn-danger">
-                            <i class="bi bi-trash"></i> Удалить
-                        </a>
-                    {% endif %}
-
-                    <!-- Кнопка "Назад" для всех -->
-                    <a href="{% url 'posts:posts_list' %}" class="btn btn-secondary ms-auto">
-                        <i class="bi bi-arrow-left"></i> Назад к списку
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<style>
-    .post-content {
-        font-size: 1.1rem;
-        line-height: 1.6;
+        `;
     }
+}
 
-    .card {
-        border: none;
-        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+// Функция для обработки нажатия на кнопку подписки
+async function handleSubscribe() {
+    try {
+        const accessToken = localStorage.getItem('access_token');
+        if (!accessToken) {
+            window.location.href = '{% url "users:login" %}?next={{ request.path }}';
+            return;
+        }
+
+        // Создаем платеж через API
+        const response = await fetch('{% url "users:api_payment_create" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + accessToken
+            }
+        });
+
+        if (response.ok) {
+            const responseData = await response.json();
+            // Перенаправляем на страницу оплаты Stripe
+            window.location.href = responseData.payment_link;
+        } else {
+            const errorData = await response.json();
+            alert('Ошибка: ' + (errorData.error || 'Неизвестная ошибка'));
+        }
+
+    } catch (error) {
+        alert('Ошибка соединения: ' + error.message);
     }
-
-    .card-header {
-        background-color: #172EA6;
-        color: white;
-        border-bottom: none;
-    }
-
-    .badge {
-        font-size: 0.8rem;
-    }
-</style>
-
+}
+</script>
 {% endblock %}

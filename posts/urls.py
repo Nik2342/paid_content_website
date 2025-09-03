@@ -13,6 +13,7 @@ app_name = PostsConfig.name
 
 
 urlpatterns = [
+    path("",PostListView.as_view(), name="posts_list"),
     path("posts/", PostListView.as_view(), name="posts_list"),
     path("posts/create/", PostCreateView.as_view(), name="post_create"),
     path("posts/<int:pk>/", PostDetailView.as_view(), name="post_detail"),

@@ -14,17 +14,17 @@
                         <h5 class="card-title">{{ post.title }}</h5>
 
                         {% if post.image %}
-                            {% if not post.is_paid or post.user_has_access %}
-                                <img src="{{ post.image.url }}" alt="{{ post.title }}"
-                                     class="img-fluid mb-3" style="height: 200px; object-fit: cover;">
-                            {% else %}
-                                <div class="alert alert-warning">
-                                    <i class="bi bi-lock"></i> Требуется подписка для просмотра изображения
-                                </div>
-                            {% endif %}
+                            <img src="{{ post.image.url }}" alt="{{ post.title }}"
+                                 class="img-fluid mb-3" style="height: 200px; object-fit: cover;">
                         {% endif %}
 
-                        <p class="card-text">{{ post.content|truncatewords:30 }}</p>
+                        <p class="card-text">
+                            {% if post.is_paid %}
+                                <span class="text-muted">Платный контент...</span>
+                            {% else %}
+                                {{ post.content|truncatewords:30 }}
+                            {% endif %}
+                        </p>
 
                         <div class="d-flex justify-content-between align-items-center">
                             <a href="{% url 'posts:post_detail' post.pk %}" class="btn btn-primary btn-sm">
@@ -48,8 +48,15 @@
     {% else %}
         <div class="alert alert-info">
             <i class="bi bi-info-circle"></i> Пока нет ни одного поста.
-            <a href="{% url 'posts:post_create' %}" class="alert-link">Создайте первый!</a>
         </div>
     {% endif %}
 </div>
+
+<script>
+// Проверяем аутентификацию при загрузке
+document.addEventListener('DOMContentLoaded', function() {
+    // Функция уже есть в base.html, просто убеждаемся что работает
+    console.log('Posts list loaded');
+});
+</script>
 {% endblock %}

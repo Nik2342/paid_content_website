@@ -9,18 +9,32 @@ class UserSerializer(ModelSerializer):
         fields = "__all__"
 
 
-class PaymentSerializer(ModelSerializer):
+class PaymentCreateSerializer(ModelSerializer):
+    """Сериализатор только для создания платежей"""
+
     class Meta:
         model = Payment
-        fields = ["id", "user", "session_id", "link"]  # Убираем amount совсем
-        read_only_fields = ["id", "user", "session_id", "link"]
+        fields = []  # Пустой список полей - ничего не требуется от пользователя
 
     def create(self, validated_data):
         # Создаем объект payment вручную
+        request = self.context["request"]
+        amount = 1000  # Фиксированная сумма
+
+        # Создаем платежную сессию
+        from users.services import create_payment_session
+
+        session_id, payment_link = create_payment_session(amount, "Премиум подписка")
+
         payment = Payment.objects.create(
-            user=self.context["request"].user,
-            amount=1000,  # Фиксированное значение
-            session_id=validated_data.get("session_id", ""),
-            link=validated_data.get("link", ""),
+            user=request.user, amount=amount, session_id=session_id, link=payment_link
         )
+
+        # Сохраняем данные для response
+        self.payment_data = {
+            "payment_link": payment_link,
+            "session_id": session_id,
+            "amount": amount,
+        }
+
         return payment

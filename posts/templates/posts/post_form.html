@@ -17,9 +17,8 @@
                 </h4>
             </div>
             <div class="card-body">
-                <form method="post" enctype="multipart/form-data" novalidate>
-                    {% csrf_token %}
-
+                <form method="post" enctype="multipart/form-data" id="post-form">
+                    <!-- Убрали csrf_token -->
 
                     {% if form.non_field_errors %}
                     <div class="alert alert-danger">
@@ -29,6 +28,7 @@
                     </div>
                     {% endif %}
 
+                    <!-- Заголовок -->
                     <div class="mb-3">
                         <label for="{{ form.title.id_for_label }}" class="form-label">
                             <strong>Заголовок поста *</strong>
@@ -43,6 +43,7 @@
                         {% endif %}
                     </div>
 
+                    <!-- Содержание -->
                     <div class="mb-3">
                         <label for="{{ form.content.id_for_label }}" class="form-label">
                             <strong>Содержание поста *</strong>
@@ -55,9 +56,9 @@
                             {% endfor %}
                         </div>
                         {% endif %}
-                        <div class="form-text">Напишите основное содержание вашего поста</div>
                     </div>
 
+                    <!-- Изображение -->
                     <div class="mb-3">
                         <label for="{{ form.image.id_for_label }}" class="form-label">
                             <strong>Изображение</strong>
@@ -70,15 +71,18 @@
                             {% endfor %}
                         </div>
                         {% endif %}
-                        <div class="form-text">Загрузите изображение для вашего поста (необязательно)</div>
                     </div>
 
+                    <!-- Платный контент -->
                     <div class="mb-3">
                         <div class="form-check form-switch">
                             {{ form.is_paid }}
                             <label class="form-check-label" for="{{ form.is_paid.id_for_label }}">
                                 <strong>Платный контент</strong>
                             </label>
+                        </div>
+                        <div class="form-text">
+                            Если включено, пост будет доступен только пользователям с подпиской
                         </div>
                         {% if form.is_paid.errors %}
                         <div class="text-danger small mt-1">
@@ -87,7 +91,6 @@
                             {% endfor %}
                         </div>
                         {% endif %}
-                        <div class="form-text">Если включено, контент будет доступен только оплатившим подписку</div>
                     </div>
 
                     <div class="d-flex gap-2 pt-3">
@@ -103,62 +106,51 @@
 </div>
 
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const isPaidCheckbox = document.getElementById('{{ form.is_paid.id_for_label }}');
-        const priceField = document.getElementById('price-field');
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('post-form');
+    const accessToken = localStorage.getItem('access_token');
 
-        function togglePriceField() {
-            priceField.style.display = isPaidCheckbox.checked ? 'block' : 'none';
+    // Проверяем аутентификацию
+    if (!accessToken) {
+        window.location.href = '{% url "users:login" %}?next={{ request.path }}';
+        return;
+    }
+
+    // Обработчик отправки формы
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const formData = new FormData(this);
+
+        try {
+            const response = await fetch(this.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Authorization': 'Bearer ' + accessToken
+                }
+            });
+
+            if (response.status === 401) {
+                localStorage.removeItem('access_token');
+                window.location.href = '{% url "users:login" %}?next={{ request.path }}';
+                return;
+            }
+
+            const data = await response.json();
+
+            if (data.success) {
+                window.location.href = data.redirect_url || '{% url "posts:posts_list" %}';
+            } else {
+                alert('Ошибка: ' + (data.error || JSON.stringify(data.errors)));
+            }
+
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Произошла ошибка при создании поста');
         }
-        togglePriceField();
-        isPaidCheckbox.addEventListener('change', togglePriceField);
     });
+});
 </script>
-
-<style>
-    .form-label {
-        font-weight: 500;
-        margin-bottom: 0.5rem;
-    }
-
-    input[type="text"],
-    input[type="number"],
-    textarea,
-    input[type="file"] {
-        width: 100%;
-        padding: 0.75rem;
-        border: 1px solid #dee2e6;
-        border-radius: 0.375rem;
-        transition: border-color 0.15s ease-in-out;
-    }
-
-    input[type="text"]:focus,
-    input[type="number"]:focus,
-    textarea:focus {
-        border-color: #172EA6;
-        outline: 0;
-        box-shadow: 0 0 0 0.2rem rgba(23, 46, 166, 0.25);
-    }
-
-    textarea {
-        min-height: 150px;
-        resize: vertical;
-    }
-
-    .form-check-input:checked {
-        background-color: #172EA6;
-        border-color: #172EA6;
-    }
-
-    .card {
-        border: none;
-        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-    }
-
-    .card-header {
-        background-color: #172EA6;
-        color: white;
-        border-bottom: none;
-    }
-</style>
 {% endblock %}

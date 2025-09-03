@@ -46,24 +46,17 @@ def create_stripe_checkout_session(
 
 
 def create_payment_session(amount: int, product_name: str = "Подписка") -> tuple:
-    """Полный процесс создания платежа - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     try:
-        # Создаем продукт
         product = create_stripe_product(product_name, "Доступ к премиум контенту")
-
-        # Создаем цену
         price = create_stripe_price(product.id, amount)
 
-        # Создаем сессию
-        success_url = "http://127.0.0.1:8000/users/payment/success/"
-        cancel_url = "http://127.0.0.1:8000/users/payment/cancel/"
+        # Добавляем session_id в URL для активации при возврате
+        success_url = "http://127.0.0.1:8000/users/subscribe/?success=true&session_id={CHECKOUT_SESSION_ID}"
+        cancel_url = "http://127.0.0.1:8000/users/subscribe/?canceled=true"
 
         session = create_stripe_checkout_session(price.id, success_url, cancel_url)
 
-        # ВОЗВРАЩАЕМ ТОЛЬКО session_id И url
         return session.id, session.url
 
-    except stripe.error.StripeError as e:
-        raise Exception(f"Stripe error: {str(e)}")
     except Exception as e:
         raise Exception(f"Error creating payment session: {str(e)}")

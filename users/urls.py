@@ -1,28 +1,27 @@
 from django.urls import path
 from django.views.generic import TemplateView
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from django.contrib.auth.views import LogoutView  # Добавляем импорт
+
 from users.views import (
     SubscribeView,
     PaymentSuccessView,
     PaymentCancelView,
+    ActivateSubscriptionView,
     UserCreateAPIView,
     PaymentCreateAPIView,
-    UserProfileView,
-    StripeWebhookView,
+    UserProfileView, api_django_login,
 )
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 app_name = "users"
 
 urlpatterns = [
-    # HTML pages
     path(
         "login/", TemplateView.as_view(template_name="users/login.html"), name="login"
     ),
     path(
-        "logout/",
-        TemplateView.as_view(template_name="users/logout.html"),
-        name="logout",
-    ),
+        "logout/", LogoutView.as_view(next_page="posts:posts_list"), name="logout"
+    ),  # Исправлено!
     path(
         "register/",
         TemplateView.as_view(template_name="users/register.html"),
@@ -41,5 +40,10 @@ urlpatterns = [
         PaymentCreateAPIView.as_view(),
         name="api_payment_create",
     ),
-    path("api/stripe/webhook/", StripeWebhookView.as_view(), name="stripe_webhook"),
+    path(
+        "api/activate-subscription/",
+        ActivateSubscriptionView.as_view(),
+        name="activate_subscription",
+    ),
+    path('api/django-login/', api_django_login, name='api_django_login'),
 ]

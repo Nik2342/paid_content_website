@@ -5,9 +5,9 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="csrf-token" content="{{ csrf_token }}">
     <title>{% block title %}Publish Paid Content{% endblock %}</title>
     <link href="{% static 'css/bootstrap.min.css' %}" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
 </head>
 
 <body class="d-flex flex-column min-vh-100">
@@ -18,44 +18,71 @@
                 <strong>PaidContent</strong>
             </a>
 
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
             <div class="collapse navbar-collapse" id="navbarMain">
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'posts:posts_list' %}">Главная</a>
+                        <a class="nav-link" href="{% url 'posts:posts_list' %}">
+                            <i class="bi bi-house"></i> Главная
+                        </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'posts:post_create' %}">Создать пост</a>
+                        <a class="nav-link" href="{% url 'posts:post_create' %}" id="createPostLink" style="display: none;">
+                            <i class="bi bi-plus-circle"></i> Создать пост
+                        </a>
                     </li>
                 </ul>
 
-                <div class="d-flex">
-                    {% if user.is_authenticated %}
+                <div class="d-flex align-items-center">
+                    <!-- Статус аутентификации -->
+                    <span id="authStatus" class="text-light me-3" style="display: none;">
+                        <span id="premiumBadge" class="badge bg-success me-2" style="display: none;">
+                            <i class="bi bi-star-fill"></i> Premium
+                        </span>
+                        <i class="bi bi-phone"></i> <span id="userPhone"></span>
+                    </span>
+                    
+                    <!-- Кнопки для неаутентифицированных -->
+                    <div id="authButtons">
+                        <a href="{% url 'users:login' %}" class="btn btn-outline-light me-2">
+                            <i class="bi bi-box-arrow-in-right"></i> Войти
+                        </a>
+                        <a href="{% url 'users:register' %}" class="btn btn-light">
+                            <i class="bi bi-person-plus"></i> Регистрация
+                        </a>
+                    </div>
+                    
+                    <!-- Меню для аутентифицированных -->
+                    <div id="userMenu" style="display: none;">
+                        <a id="subscribeBtnNav" href="{% url 'users:subscribe' %}" class="btn btn-warning btn-sm me-2" style="display: none;">
+                            <i class="bi bi-gem"></i> Подписка
+                        </a>
                         <form method="post" action="{% url 'users:logout' %}" class="d-inline">
                             {% csrf_token %}
-                            <button type="submit" class="btn btn-outline-light">Выйти</button>
+                            <button type="submit" class="btn btn-outline-light">
+                                <i class="bi bi-box-arrow-right"></i> Выйти
+                            </button>
                         </form>
-                    {% else %}
-                        <a href="{% url 'users:login' %}" class="btn btn-outline-light me-2">Вход</a>
-                        <a href="{% url 'users:register' %}" class="btn btn-light">Регистрация</a>
-                    {% endif %}
-
-
-                    {% if user.is_authenticated %}
-                        <div class="ms-3">
-                            {% if user.has_paid_subscription %}
-                                <span class="badge bg-success">Premium</span>
-                            {% else %}
-                                <a href="{% url 'users:subscribe' %}" class="btn btn-outline-warning btn-sm">
-                                    Подписка
-                                </a>
-                            {% endif %}
-                        </div>
-                    {% endif %}
-
+                    </div>
                 </div>
             </div>
         </div>
     </nav>
+
+    <!-- Сообщения -->
+    {% if messages %}
+    <div class="container mt-3">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
 
     <main class="flex-grow-1 py-4">
         <div class="container">
@@ -71,6 +98,131 @@
     </footer>
 
     <script src="{% static 'js/bootstrap.bundle.min.js' %}"></script>
-{% block extra_js %}{% endblock %}
+    
+    <script>
+    // Функция для проверки аутентификации через JWT
+    async function checkAuth() {
+        try {
+            const accessToken = localStorage.getItem('access_token');
+            if (!accessToken) {
+                showUnauthenticatedUI();
+                return false;
+            }
+
+            const response = await fetch('{% url "users:user_profile" %}', {
+                headers: {
+                    'Authorization': 'Bearer ' + accessToken
+                }
+            });
+
+            if (response.ok) {
+                const userData = await response.json();
+                updateUI(userData);
+                checkAuthConsistency(userData); // Проверка соответствия
+                return true;
+            } else {
+                showUnauthenticatedUI();
+                return false;
+            }
+        } catch (error) {
+            console.error('Ошибка проверки аутентификации:', error);
+            showUnauthenticatedUI();
+            return false;
+        }
+    }
+
+    // Проверка соответствия JWT и Django аутентификации (соответствует наставнику)
+    function checkAuthConsistency(jwtUser) {
+        const djangoAuthenticated = {% if user.is_authenticated %}true{% else %}false{% endif %};
+        const djangoUserId = {% if user.is_authenticated %}{{ user.id }}{% else %}null{% endif %};
+
+        if (djangoAuthenticated && jwtUser && djangoUserId !== jwtUser.id) {
+            console.warn('⚠️ Обнаружено несоответствие аутентификаций:');
+            console.log('Django user ID:', djangoUserId);
+            console.log('JWT user ID:', jwtUser.id);
+            // Только мониторинг - никаких автоматических действий
+        }
+    }
+
+    // Показать UI для неаутентифицированного пользователя
+    function showUnauthenticatedUI() {
+        const authStatus = document.getElementById('authStatus');
+        const authButtons = document.getElementById('authButtons');
+        const userMenu = document.getElementById('userMenu');
+        const createPostLink = document.getElementById('createPostLink');
+
+        authButtons.style.display = 'inline';
+        authStatus.style.display = 'none';
+        userMenu.style.display = 'none';
+        createPostLink.style.display = 'none';
+    }
+
+    // Обновляем UI для аутентифицированного пользователя
+    function updateUI(userData) {
+        const authStatus = document.getElementById('authStatus');
+        const authButtons = document.getElementById('authButtons');
+        const userMenu = document.getElementById('userMenu');
+        const userPhone = document.getElementById('userPhone');
+        const premiumBadge = document.getElementById('premiumBadge');
+        const subscribeBtnNav = document.getElementById('subscribeBtnNav');
+        const createPostLink = document.getElementById('createPostLink');
+
+        authButtons.style.display = 'none';
+        authStatus.style.display = 'inline';
+        userMenu.style.display = 'inline';
+        createPostLink.style.display = 'inline';
+
+        userPhone.textContent = userData.phone;
+
+        if (userData.has_paid_subscription) {
+            premiumBadge.style.display = 'inline';
+            subscribeBtnNav.style.display = 'none';
+        } else {
+            premiumBadge.style.display = 'none';
+            subscribeBtnNav.style.display = 'inline';
+        }
+    }
+
+    // Функция для очистки токенов аутентификации
+    function clearAuthTokens() {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        localStorage.removeItem('last_session_id');
+
+        document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    }
+
+    // Обработчик выхода
+    document.addEventListener('DOMContentLoaded', function() {
+        const logoutForms = document.querySelectorAll('form[action*="logout"]');
+        logoutForms.forEach(form => {
+            form.addEventListener('submit', function(e) {
+                clearAuthTokens();
+            });
+        });
+    });
+
+    // При загрузке страницы проверяем аутентификацию
+    document.addEventListener('DOMContentLoaded', function() {
+        checkAuth();
+
+        // Периодически проверяем статус аутентификации
+        setInterval(checkAuth, 300000);
+    });
+
+    // Глобальные функции для доступа из других скриптов
+    window.authManager = {
+        checkAuth: checkAuth,
+        getToken: () => localStorage.getItem('access_token'),
+        logout: function() {
+            clearAuthTokens();
+            showUnauthenticatedUI();
+        }
+    };
+    </script>
+    
+    {% block extra_scripts %}
+    {% endblock %}
 </body>
 </html>

@@ -11,102 +11,74 @@
         </div>
         <div class="card-body">
 
-          {% if has_subscription %}
+          {% if activation_result == "success" %}
           <div class="alert alert-success text-center">
-            <h5>✅ У вас уже есть активная подписка!</h5>
-            <p>Вы можете получить доступ ко всем платным материалам.</p>
+            <h5>✅ Подписка активирована!</h5>
+            <p>Теперь вам доступен весь премиум контент.</p>
             <a href="{% url 'posts:posts_list' %}" class="btn btn-primary mt-2">
               Перейти к постам
             </a>
           </div>
-          {% else %}
-
-          <div class="text-center mb-4">
-            <h5>Премиум подписка</h5>
-            <p class="text-muted">Получите доступ ко всем платным материалам</p>
-            <h3 class="text-primary">1000 ₽</h3>
-            <small class="text-muted">Единоразовый платеж</small>
-          </div>
-
-          <div class="benefits mb-4">
-            <h6>Что вы получаете:</h6>
-            <ul class="list-unstyled">
-              <li>✅ Доступ ко всем платным постам</li>
-              <li>✅ Просмотр премиум контента</li>
-              <li>✅ Возможность создавать платные посты</li>
-              <li>✅ Приоритетная поддержка</li>
-            </ul>
-          </div>
-
-          <div class="d-grid gap-2">
-            <button id="subscribeBtn" class="btn btn-primary btn-lg">
-              <span id="submitText">Оформить подписку</span>
-              <div id="spinner" class="spinner-border spinner-border-sm" role="status" style="display: none;">
-                <span class="visually-hidden">Загрузка...</span>
-              </div>
-            </button>
-          </div>
-
           {% endif %}
+
+          <div id="hasSubscription" style="display: none;">
+            <div class="alert alert-success text-center">
+              <h5>✅ У вас уже есть активная подписка!</h5>
+              <p>Вы можете получить доступ ко всем платным материалам.</p>
+              <a href="{% url 'posts:posts_list' %}" class="btn btn-primary mt-2">
+                Перейти к постам
+              </a>
+            </div>
+          </div>
+
+          <div id="noSubscription">
+            <div class="text-center mb-4">
+              <h5>Премиум подписка</h5>
+              <p class="text-muted">Получите доступ ко всем платным материалам</p>
+              <h3 class="text-primary">1000 ₽</h3>
+              <small class="text-muted">Единоразовый платеж</small>
+            </div>
+
+            <div class="benefits mb-4">
+              <h6>Что вы получаете:</h6>
+              <ul class="list-unstyled">
+                <li>✅ Доступ ко всем платным постам</li>
+                <li>✅ Просмотр премиум контента</li>
+                <li>✅ Возможность создавать платные посты</li>
+                <li>✅ Приоритетная поддержка</li>
+              </ul>
+            </div>
+
+            <div class="d-grid gap-2">
+              <button id="subscribeBtn" class="btn btn-primary btn-lg">
+                <span id="submitText">Оформить подписку</span>
+                <div id="spinner" class="spinner-border spinner-border-sm" role="status" style="display: none;">
+                  <span class="visually-hidden">Загрузка...</span>
+                </div>
+              </button>
+            </div>
+          </div>
 
           <div id="errorMessage" class="alert alert-danger mt-3" style="display: none;"></div>
 
-          {% if not has_subscription %}
-          <div class="text-center mt-3">
-            <small class="text-muted">
-              После оплаты вы будете перенаправлены на сайт. Подписка активируется автоматически.
-            </small>
-          </div>
-          {% endif %}
         </div>
       </div>
     </div>
   </div>
 </div>
 
-<style>
-.spinner-border {
-    margin-left: 8px;
-}
-.benefits {
-    background-color: #f8f9fa;
-    padding: 1rem;
-    border-radius: 0.5rem;
-    border-left: 4px solid #172EA6;
-}
-.benefits h6 {
-    color: #172EA6;
-    font-weight: 600;
-}
-.benefits li {
-    padding: 0.25rem 0;
-}
-</style>
-
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const subscribeBtn = document.getElementById('subscribeBtn');
     const errorDiv = document.getElementById('errorMessage');
+    const hasSubscriptionDiv = document.getElementById('hasSubscription');
+    const noSubscriptionDiv = document.getElementById('noSubscription');
 
-    // Проверяем наличие токенов при загрузке страницы
-    const accessToken = localStorage.getItem('access_token');
-    const refreshToken = localStorage.getItem('refresh_token');
+    // Проверяем статус подписки при загрузке
+    checkSubscriptionStatus();
 
-    console.log('Access token:', accessToken); // Для отладки
-    console.log('Refresh token:', refreshToken); // Для отладки
-
-    if (!accessToken || !refreshToken) {
-        showError('Требуется авторизация. Пожалуйста, войдите в систему.');
-        if (subscribeBtn) {
-            subscribeBtn.disabled = true;
-        }
-        setTimeout(() => {
-            window.location.href = '{% url "users:login" %}?next={% url "users:subscribe" %}';
-        }, 2000);
-        return;
-    }
-
-    if (subscribeBtn && !{{ has_subscription|yesno:"true,false" }}) {
+    // Обработчик для кнопки подписки
+    if (subscribeBtn) {
         subscribeBtn.addEventListener('click', async function() {
             const submitText = document.getElementById('submitText');
             const spinner = document.getElementById('spinner');
@@ -117,109 +89,61 @@ document.addEventListener('DOMContentLoaded', function() {
             errorDiv.style.display = 'none';
 
             try {
-                console.log('Making request with token:', accessToken); // Для отладки
+                const accessToken = localStorage.getItem('access_token');
+
+                if (!accessToken) {
+                    window.location.href = '{% url "users:login" %}?next={% url "users:subscribe" %}';
+                    return;
+                }
 
                 const response = await fetch('{% url "users:api_payment_create" %}', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': 'Bearer ' + accessToken // Явно добавляем Bearer
-                    },
-                    body: JSON.stringify({
-                        amount: 1000
-                    })
+                        'Authorization': 'Bearer ' + accessToken
+                    }
                 });
 
-                console.log('Response status:', response.status); // Для отладки
-
-                if (response.status === 401) {
-                    // Пробуем обновить токен
-                    try {
-                        const newAccessToken = await refreshToken();
-                        console.log('New access token:', newAccessToken); // Для отладки
-
-                        // Повторяем запрос с новым токеном
-                        const retryResponse = await fetch('{% url "users:api_payment_create" %}', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': 'Bearer ' + newAccessToken
-                            },
-                            body: JSON.stringify({
-                                amount: 1000
-                            })
-                        });
-
-                        if (retryResponse.ok) {
-                            const responseData = await retryResponse.json();
-                            window.location.href = responseData.payment_link;
-                            return;
-                        } else {
-                            throw new Error('Retry failed');
-                        }
-                    } catch (refreshError) {
-                        console.error('Token refresh error:', refreshError);
-                        showError('Сессия истекла. Пожалуйста, войдите снова.');
-                        window.location.href = '{% url "users:login" %}';
-                        return;
-                    }
-                }
-
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error('Error response:', errorText); // Для отладки
-
+                if (response.ok) {
+                    const responseData = await response.json();
+                    window.location.href = responseData.payment_link;
+                } else {
+                    const errorData = await response.json();
                     let errorMessage = 'Ошибка создания платежа';
-                    try {
-                        const errorData = JSON.parse(errorText);
-                        if (errorData.error) errorMessage = errorData.error;
-                        if (errorData.detail) errorMessage = errorData.detail;
-                    } catch (e) {
-                        errorMessage = errorText;
-                    }
+                    if (errorData.error) errorMessage = errorData.error;
+                    if (errorData.detail) errorMessage = errorData.detail;
 
                     showError(errorMessage);
                     resetButton();
-                    return;
                 }
 
-                const responseData = await response.json();
-                console.log('Success response:', responseData); // Для отладки
-                window.location.href = responseData.payment_link;
-
             } catch (error) {
-                console.error('Request error:', error);
                 showError('Ошибка соединения с сервером: ' + error.message);
                 resetButton();
             }
         });
     }
 
-    // Функция для обновления токена
-    async function refreshToken() {
-        const refreshToken = localStorage.getItem('refresh_token');
+    async function checkSubscriptionStatus() {
+        try {
+            const accessToken = localStorage.getItem('access_token');
+            if (!accessToken) return;
 
-        if (!refreshToken) {
-            throw new Error('Нет refresh token');
-        }
+            const response = await fetch('{% url "users:user_profile" %}', {
+                headers: {
+                    'Authorization': 'Bearer ' + accessToken
+                }
+            });
 
-        const response = await fetch('{% url "users:token_refresh" %}', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                refresh: refreshToken
-            })
-        });
-
-        if (response.ok) {
-            const data = await response.json();
-            localStorage.setItem('access_token', data.access);
-            return data.access;
-        } else {
-            const errorText = await response.text();
-            throw new Error('Не удалось обновить токен: ' + errorText);
+            if (response.ok) {
+                const userData = await response.json();
+                if (userData.has_paid_subscription) {
+                    hasSubscriptionDiv.style.display = 'block';
+                    noSubscriptionDiv.style.display = 'none';
+                }
+            }
+        } catch (error) {
+            console.error('Ошибка проверки подписки:', error);
         }
     }
 
