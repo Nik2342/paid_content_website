@@ -15,13 +15,27 @@
           <div class="alert alert-success text-center">
             <h5>✅ У вас уже есть активная подписка!</h5>
             <p>Вы можете получить доступ ко всем платным материалам.</p>
+            <a href="{% url 'posts:posts_list' %}" class="btn btn-primary mt-2">
+              Перейти к постам
+            </a>
           </div>
           {% else %}
 
           <div class="text-center mb-4">
             <h5>Премиум подписка</h5>
             <p class="text-muted">Получите доступ ко всем платным материалам</p>
-            <h3 class="text-primary">{{ amount }} ₽</h3>
+            <h3 class="text-primary">1000 ₽</h3>
+            <small class="text-muted">Единоразовый платеж</small>
+          </div>
+
+          <div class="benefits mb-4">
+            <h6>Что вы получаете:</h6>
+            <ul class="list-unstyled">
+              <li>✅ Доступ ко всем платным постам</li>
+              <li>✅ Просмотр премиум контента</li>
+              <li>✅ Возможность создавать платные посты</li>
+              <li>✅ Приоритетная поддержка</li>
+            </ul>
           </div>
 
           <div class="d-grid gap-2">
@@ -33,16 +47,17 @@
             </button>
           </div>
 
-          <div id="paymentLink" class="mt-3 text-center" style="display: none;">
-            <p>Перейдите по ссылке для оплаты:</p>
-            <a id="paymentUrl" href="#" target="_blank" class="btn btn-outline-success">
-              Перейти к оплате
-            </a>
-          </div>
-
           {% endif %}
 
           <div id="errorMessage" class="alert alert-danger mt-3" style="display: none;"></div>
+
+          {% if not has_subscription %}
+          <div class="text-center mt-3">
+            <small class="text-muted">
+              После оплаты вы будете перенаправлены на сайт. Подписка активируется автоматически.
+            </small>
+          </div>
+          {% endif %}
         </div>
       </div>
     </div>
@@ -53,71 +68,159 @@
 .spinner-border {
     margin-left: 8px;
 }
+.benefits {
+    background-color: #f8f9fa;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    border-left: 4px solid #172EA6;
+}
+.benefits h6 {
+    color: #172EA6;
+    font-weight: 600;
+}
+.benefits li {
+    padding: 0.25rem 0;
+}
 </style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const subscribeBtn = document.getElementById('subscribeBtn');
     const errorDiv = document.getElementById('errorMessage');
-    const paymentLinkDiv = document.getElementById('paymentLink');
-    const paymentUrl = document.getElementById('paymentUrl');
 
-    if (subscribeBtn) {
+    // Проверяем наличие токенов при загрузке страницы
+    const accessToken = localStorage.getItem('access_token');
+    const refreshToken = localStorage.getItem('refresh_token');
+
+    console.log('Access token:', accessToken); // Для отладки
+    console.log('Refresh token:', refreshToken); // Для отладки
+
+    if (!accessToken || !refreshToken) {
+        showError('Требуется авторизация. Пожалуйста, войдите в систему.');
+        if (subscribeBtn) {
+            subscribeBtn.disabled = true;
+        }
+        setTimeout(() => {
+            window.location.href = '{% url "users:login" %}?next={% url "users:subscribe" %}';
+        }, 2000);
+        return;
+    }
+
+    if (subscribeBtn && !{{ has_subscription|yesno:"true,false" }}) {
         subscribeBtn.addEventListener('click', async function() {
             const submitText = document.getElementById('submitText');
             const spinner = document.getElementById('spinner');
 
-            // Показываем загрузку
             submitText.textContent = 'Создание платежа...';
             spinner.style.display = 'inline-block';
             subscribeBtn.disabled = true;
             errorDiv.style.display = 'none';
-            paymentLinkDiv.style.display = 'none';
 
             try {
-                // Получаем access token из localStorage
-                const accessToken = localStorage.getItem('access_token');
-
-                if (!accessToken) {
-                    showError('Требуется авторизация. Пожалуйста, войдите снова.');
-                    resetButton();
-                    return;
-                }
+                console.log('Making request with token:', accessToken); // Для отладки
 
                 const response = await fetch('{% url "users:api_payment_create" %}', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${accessToken}`
+                        'Authorization': 'Bearer ' + accessToken // Явно добавляем Bearer
                     },
-                    body: JSON.stringify({})
+                    body: JSON.stringify({
+                        amount: 1000
+                    })
                 });
 
-                const responseData = await response.json();
+                console.log('Response status:', response.status); // Для отладки
 
-                if (response.ok) {
-                    // Показываем ссылку для оплаты
-                    paymentUrl.href = responseData.payment_link;
-                    paymentUrl.textContent = 'Оплатить ' + responseData.amount / 100 + ' ₽';
-                    paymentLinkDiv.style.display = 'block';
+                if (response.status === 401) {
+                    // Пробуем обновить токен
+                    try {
+                        const newAccessToken = await refreshToken();
+                        console.log('New access token:', newAccessToken); // Для отладки
 
-                    submitText.textContent = 'Оплатить';
-                    spinner.style.display = 'none';
+                        // Повторяем запрос с новым токеном
+                        const retryResponse = await fetch('{% url "users:api_payment_create" %}', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': 'Bearer ' + newAccessToken
+                            },
+                            body: JSON.stringify({
+                                amount: 1000
+                            })
+                        });
 
-                } else {
+                        if (retryResponse.ok) {
+                            const responseData = await retryResponse.json();
+                            window.location.href = responseData.payment_link;
+                            return;
+                        } else {
+                            throw new Error('Retry failed');
+                        }
+                    } catch (refreshError) {
+                        console.error('Token refresh error:', refreshError);
+                        showError('Сессия истекла. Пожалуйста, войдите снова.');
+                        window.location.href = '{% url "users:login" %}';
+                        return;
+                    }
+                }
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Error response:', errorText); // Для отладки
+
                     let errorMessage = 'Ошибка создания платежа';
-                    if (responseData.detail) errorMessage = responseData.detail;
-                    else if (responseData.error) errorMessage = responseData.error;
+                    try {
+                        const errorData = JSON.parse(errorText);
+                        if (errorData.error) errorMessage = errorData.error;
+                        if (errorData.detail) errorMessage = errorData.detail;
+                    } catch (e) {
+                        errorMessage = errorText;
+                    }
 
                     showError(errorMessage);
                     resetButton();
+                    return;
                 }
 
+                const responseData = await response.json();
+                console.log('Success response:', responseData); // Для отладки
+                window.location.href = responseData.payment_link;
+
             } catch (error) {
-                showError('Ошибка соединения с сервером');
+                console.error('Request error:', error);
+                showError('Ошибка соединения с сервером: ' + error.message);
                 resetButton();
             }
         });
+    }
+
+    // Функция для обновления токена
+    async function refreshToken() {
+        const refreshToken = localStorage.getItem('refresh_token');
+
+        if (!refreshToken) {
+            throw new Error('Нет refresh token');
+        }
+
+        const response = await fetch('{% url "users:token_refresh" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                refresh: refreshToken
+            })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            localStorage.setItem('access_token', data.access);
+            return data.access;
+        } else {
+            const errorText = await response.text();
+            throw new Error('Не удалось обновить токен: ' + errorText);
+        }
     }
 
     function showError(message) {
@@ -126,15 +229,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function resetButton() {
-        if (document.getElementById('submitText')) {
-            document.getElementById('submitText').textContent = 'Оформить подписку';
-        }
-        if (document.getElementById('spinner')) {
-            document.getElementById('spinner').style.display = 'none';
-        }
-        if (subscribeBtn) {
-            subscribeBtn.disabled = false;
-        }
+        const submitText = document.getElementById('submitText');
+        const spinner = document.getElementById('spinner');
+
+        if (submitText) submitText.textContent = 'Оформить подписку';
+        if (spinner) spinner.style.display = 'none';
+        if (subscribeBtn) subscribeBtn.disabled = false;
     }
 });
 </script>

@@ -12,8 +12,15 @@ class UserSerializer(ModelSerializer):
 class PaymentSerializer(ModelSerializer):
     class Meta:
         model = Payment
-        fields = ['id', 'amount', 'session_id', 'link']
-        read_only_fields = ['session_id', 'link']
+        fields = ["id", "user", "session_id", "link"]  # Убираем amount совсем
+        read_only_fields = ["id", "user", "session_id", "link"]
 
     def create(self, validated_data):
-        return Payment.objects.create(**validated_data)
+        # Создаем объект payment вручную
+        payment = Payment.objects.create(
+            user=self.context["request"].user,
+            amount=1000,  # Фиксированное значение
+            session_id=validated_data.get("session_id", ""),
+            link=validated_data.get("link", ""),
+        )
+        return payment

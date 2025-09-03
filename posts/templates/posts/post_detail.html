@@ -37,29 +37,29 @@
                     <div class="post-content">
                         {% if not post.is_paid or user_has_access or user == post.author %}
                             <p>{{ post.content|linebreaks }}</p>
-                        {% else %}
-                            <div class="alert alert-info">
-                                <h5><i class="bi bi-credit-card"></i> Платный контент</h5>
-                                <p>Для просмотра полного содержимого необходимо оформить подписку.</p>
+  {% else %}
+    <div class="alert alert-info">
+        <h5><i class="bi bi-credit-card"></i> Платный контент</h5>
+        <p>Для просмотра полного содержимого необходимо оформить подписку.</p>
 
-                                {% if user.is_authenticated %}
-                                    <div class="mt-3">
-                                        <a href="{% url 'users:subscribe' %}" class="btn btn-success">
-                                            <i class="bi bi-credit-card"></i> Оформить подписку
-                                        </a>
-                                    </div>
-                                {% else %}
-                                    <div class="mt-3">
-                                        <a href="{% url 'users:login' %}?next={{ request.path }}" class="btn btn-primary me-2">
-                                            <i class="bi bi-box-arrow-in-right"></i> Войти
-                                        </a>
-                                        <a href="{% url 'users:register' %}" class="btn btn-outline-primary">
-                                            <i class="bi bi-person-plus"></i> Зарегистрироваться
-                                        </a>
-                                    </div>
-                                {% endif %}
-                            </div>
-                        {% endif %}
+        {% if user.is_authenticated %}
+            <div class="mt-3">
+                <a href="{% url 'users:subscribe' %}" class="btn btn-success">
+                    <i class="bi bi-credit-card"></i> Оформить подписку
+                </a>
+            </div>
+        {% else %}
+            <div class="mt-3">
+                <a href="{% url 'users:login' %}?next={{ request.path }}" class="btn btn-primary me-2">
+                    <i class="bi bi-box-arrow-in-right"></i> Войти
+                </a>
+                <a href="{% url 'users:register' %}" class="btn btn-outline-primary">
+                    <i class="bi bi-person-plus"></i> Зарегистрироваться
+                </a>
+            </div>
+        {% endif %}
+    </div>
+{% endif %}
                     </div>
                 </div>
 
@@ -106,41 +106,5 @@
         font-size: 0.8rem;
     }
 </style>
-
-<script>
-async function createPayment() {
-    const accessToken = localStorage.getItem('access_token');
-
-    if (!accessToken) {
-        alert('Пожалуйста, войдите в систему для оформления подписки');
-        window.location.href = '{% url "users:login" %}';
-        return;
-    }
-
-    try {
-        const response = await fetch('{% url "users:api_payment_create" %}', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${accessToken}`
-            },
-            body: JSON.stringify({
-                amount: 1000
-            })
-        });
-
-        if (response.ok) {
-            const data = await response.json();
-            // Перенаправляем на страницу оплаты Stripe
-            window.location.href = data.payment_link;
-        } else {
-            const errorData = await response.json();
-            alert('Ошибка: ' + (errorData.error || 'Неизвестная ошибка'));
-        }
-    } catch (error) {
-        alert('Ошибка соединения: ' + error.message);
-    }
-}
-</script>
 
 {% endblock %}

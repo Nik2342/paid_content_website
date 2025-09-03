@@ -5,6 +5,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token }}">
     <title>{% block title %}Publish Paid Content{% endblock %}</title>
     <link href="{% static 'css/bootstrap.min.css' %}" rel="stylesheet">
 </head>
@@ -37,6 +38,20 @@
                         <a href="{% url 'users:login' %}" class="btn btn-outline-light me-2">Вход</a>
                         <a href="{% url 'users:register' %}" class="btn btn-light">Регистрация</a>
                     {% endif %}
+
+
+                    {% if user.is_authenticated %}
+                        <div class="ms-3">
+                            {% if user.has_paid_subscription %}
+                                <span class="badge bg-success">Premium</span>
+                            {% else %}
+                                <a href="{% url 'users:subscribe' %}" class="btn btn-outline-warning btn-sm">
+                                    Подписка
+                                </a>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+
                 </div>
             </div>
         </div>
@@ -56,5 +71,6 @@
     </footer>
 
     <script src="{% static 'js/bootstrap.bundle.min.js' %}"></script>
+{% block extra_js %}{% endblock %}
 </body>
 </html>

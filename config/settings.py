@@ -41,7 +41,6 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "users.middleware.JWTAuthMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -98,8 +97,8 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=5),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
 }
 
 
@@ -125,3 +124,4 @@ LOGOUT_REDIRECT_URL = "posts:posts_list"
 LOGIN_URL = "users:login"
 
 STRIPE_API_KEY = os.getenv("STRIPE_API_KEY")
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")

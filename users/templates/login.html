@@ -65,13 +65,11 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
     };
 
     try {
-        const response = await fetch('{% url "users:api_login" %}', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(formData)
-        });
+const response = await fetch('{% url "users:user_profile" %}', {
+    headers: {
+        'Authorization': `Bearer ${data.access}`
+    }
+});
 
         if (response.ok) {
           const data = await response.json();

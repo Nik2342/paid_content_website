@@ -5,14 +5,20 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import CreateView, TemplateView
 from rest_framework import status
+from rest_framework.exceptions import ValidationError
 from rest_framework.generics import CreateAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from django.http import JsonResponse
+import stripe
+from django.conf import settings
+
 from users.forms import UserRegisterForm
 from users.models import User, Payment
 from users.serializers import UserSerializer, PaymentSerializer
-from users.services import create_stripe_price, create_stripe_sessions
+from users.services import create_payment_session
 
 
 class UserCreateView(CreateView):
@@ -24,14 +30,15 @@ class UserCreateView(CreateView):
 class UserLoginView(LoginView):
     template_name = "users/login.html"
 
-@method_decorator(csrf_exempt, name='dispatch')
+
+@method_decorator(csrf_exempt, name="dispatch")
 class UserCreateAPIView(CreateAPIView):
     serializer_class = UserSerializer
     queryset = User.objects.all()
 
     def perform_create(self, serializer):
         user = serializer.save(is_active=True)
-        user.set_password(serializer.validated_data['password'])
+        user.set_password(serializer.validated_data["password"])
         user.save()
 
     def create(self, request, *args, **kwargs):
@@ -40,67 +47,153 @@ class UserCreateAPIView(CreateAPIView):
             user = User.objects.get(phone=request.data.get("phone"))
             refresh = RefreshToken.for_user(user)
 
-            return Response({
-                "tokens": {
-                    "refresh": str(refresh),
-                    "access": str(refresh.access_token),
-                },
-                "user_id": user.id,
-                "phone": user.phone
-            }, status=status.HTTP_201_CREATED)
-
-        except Exception as e:
             return Response(
-                {"error": str(e)},
-                status=status.HTTP_400_BAD_REQUEST
+                {
+                    "tokens": {
+                        "refresh": str(refresh),
+                        "access": str(refresh.access_token),
+                    },
+                    "user_id": user.id,
+                    "phone": user.phone,
+                },
+                status=status.HTTP_201_CREATED,
             )
 
-@method_decorator(csrf_exempt, name='dispatch')
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@method_decorator(csrf_exempt, name="dispatch")
 class PaymentCreateAPIView(CreateAPIView):
     serializer_class = PaymentSerializer
     queryset = Payment.objects.all()
     permission_classes = [IsAuthenticated]
 
     def perform_create(self, serializer):
-        payment = serializer.save(user=self.request.user)
+        if self.request.user.has_paid_subscription:
+            raise ValidationError("У вас уже есть активная подписка")
 
-        price = create_stripe_price(1000)
-        session_id, payment_link = create_stripe_sessions(price)
+        amount = 1000
 
-        payment.session_id = session_id
-        payment.link = payment_link
-        payment.save()
-
-        self.payment_data = {
-            'payment_link': payment_link,
-            'session_id': session_id,
-            'amount': 1000  # Добавляем сумму для отображения
-        }
-
-    def create(self, request, *args, **kwargs):
-        # Проверяем, есть ли у пользователя уже активная подписка
-        if getattr(request.user, 'has_paid_subscription', False):
-            return Response(
-                {"error": "У вас уже есть активная подписка"},
-                status=status.HTTP_400_BAD_REQUEST
+        try:
+            session_id, payment_link = create_payment_session(
+                amount, "Премиум подписка"
             )
 
-        request.data.update({'amount': 1000})
-        response = super().create(request, *args, **kwargs)
+            # Передаем только те данные, которые нужны сериализатору
+            serializer.save(session_id=session_id, link=payment_link)
 
-        if hasattr(self, 'payment_data'):
-            response.data.update(self.payment_data)
+            self.payment_data = {
+                "payment_link": payment_link,
+                "session_id": session_id,
+                "amount": amount,
+            }
 
-        return response
+        except Exception as e:
+            raise ValidationError(str(e))
 
-@method_decorator(csrf_exempt, name='dispatch')
+    def create(self, request, *args, **kwargs):
+        try:
+            # Просто вызываем родительский метод
+            response = super().create(request, *args, **kwargs)
+            if hasattr(self, "payment_data"):
+                response.data.update(self.payment_data)
+            return response
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@method_decorator(csrf_exempt, name="dispatch")
 class SubscribeView(LoginRequiredMixin, TemplateView):
-    template_name = 'subscribe.html'
+    template_name = "subscribe.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['amount'] = 1000
+        context["amount"] = 1000
+        context["has_subscription"] = getattr(
+            self.request.user, "has_paid_subscription", False
+        )
+        return context
 
-        context['has_subscription'] = getattr(self.request.user, 'has_paid_subscription', False)
 
+@method_decorator(csrf_exempt, name="dispatch")
+class StripeWebhookView(APIView):
+    """Обработчик вебхуков от Stripe для обновления статуса подписки"""
+
+    def post(self, request):
+        payload = request.body
+        sig_header = request.META.get("HTTP_STRIPE_SIGNATURE", "")
+
+        try:
+            event = stripe.Webhook.construct_event(
+                payload, sig_header, settings.STRIPE_WEBHOOK_SECRET
+            )
+        except ValueError as e:
+            return JsonResponse({"error": "Invalid payload"}, status=400)
+        except stripe.error.SignatureVerificationError as e:
+            return JsonResponse({"error": "Invalid signature"}, status=400)
+
+        # Обрабатываем успешный платеж
+        if event["type"] == "checkout.session.completed":
+            session = event["data"]["object"]
+
+            try:
+                # Находим платеж по session_id
+                payment = Payment.objects.get(session_id=session.id)
+
+                # Активируем подписку пользователя
+                payment.user.has_paid_subscription = True
+                payment.user.save()
+
+                # Можно также обновить статус платежа
+                # payment.status = 'completed'
+                # payment.save()
+
+            except Payment.DoesNotExist:
+                # Логируем ошибку, но не прерываем выполнение
+                import logging
+
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Payment with session_id {session.id} not found")
+
+        return JsonResponse({"status": "success"})
+
+
+class UserProfileView(APIView):
+    """API для получения информации о текущем пользователе"""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(
+            {
+                "id": request.user.id,
+                "phone": request.user.phone,
+                "email": request.user.email,
+                "has_paid_subscription": request.user.has_paid_subscription,
+                "first_name": request.user.first_name,
+                "last_name": request.user.last_name,
+            }
+        )
+
+
+class PaymentSuccessView(TemplateView):
+    """Страница успешной оплаты"""
+
+    template_name = "payment_success.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Можно добавить дополнительную логику, например, проверку сессии
+        return context
+
+
+class PaymentCancelView(TemplateView):
+    """Страница отмены оплаты"""
+
+    template_name = "payment_cancel.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["message"] = "Оплата была отменена. Вы можете попробовать снова."
         return context

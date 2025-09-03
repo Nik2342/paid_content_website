@@ -28,6 +28,14 @@ class User(AbstractUser):
 
 
 class Payment(models.Model):
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        verbose_name="Пользователь",
+        related_name="payments",
+        null=True,
+        blank=True,
+    )
     amount = models.PositiveIntegerField(
         verbose_name="Платеж", help_text="Сумма платежа"
     )
@@ -49,3 +57,8 @@ class Payment(models.Model):
     class Meta:
         verbose_name = "Платеж"
         verbose_name_plural = "Платежи"
+
+    def __str__(self):
+        if self.user:
+            return f"Платеж {self.amount} руб. - {self.user.phone}"
+        return f"Платеж {self.amount} руб. - Аноним"
