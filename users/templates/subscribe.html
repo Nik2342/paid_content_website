@@ -1,0 +1,165 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container">
+  <div class="row justify-content-center">
+    <div class="col-md-8">
+      <div class="card">
+        <div class="card-header">
+          <h4 class="text-center">Оформление подписки</h4>
+        </div>
+        <div class="card-body">
+
+          {% if activation_result == "success" %}
+          <div class="alert alert-success text-center">
+            <h5>✅ Подписка активирована!</h5>
+            <p>Теперь вам доступен весь премиум контент.</p>
+            <a href="{% url 'posts:posts_list' %}" class="btn btn-primary mt-2">
+              Перейти к постам
+            </a>
+          </div>
+          {% endif %}
+
+          <div id="hasSubscription" style="display: none;">
+            <div class="alert alert-success text-center">
+              <h5>✅ У вас уже есть активная подписка!</h5>
+              <p>Вы можете получить доступ ко всем платным материалам.</p>
+              <a href="{% url 'posts:posts_list' %}" class="btn btn-primary mt-2">
+                Перейти к постам
+              </a>
+            </div>
+          </div>
+
+          <div id="noSubscription">
+            <div class="text-center mb-4">
+              <h5>Премиум подписка</h5>
+              <p class="text-muted">Получите доступ ко всем платным материалам</p>
+              <h3 class="text-primary">1000 ₽</h3>
+              <small class="text-muted">Единоразовый платеж</small>
+            </div>
+
+            <div class="benefits mb-4">
+              <h6>Что вы получаете:</h6>
+              <ul class="list-unstyled">
+                <li>✅ Доступ ко всем платным постам</li>
+                <li>✅ Просмотр премиум контента</li>
+                <li>✅ Возможность создавать платные посты</li>
+                <li>✅ Приоритетная поддержка</li>
+              </ul>
+            </div>
+
+            <div class="d-grid gap-2">
+              <button id="subscribeBtn" class="btn btn-primary btn-lg">
+                <span id="submitText">Оформить подписку</span>
+                <div id="spinner" class="spinner-border spinner-border-sm" role="status" style="display: none;">
+                  <span class="visually-hidden">Загрузка...</span>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <div id="errorMessage" class="alert alert-danger mt-3" style="display: none;"></div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const subscribeBtn = document.getElementById('subscribeBtn');
+    const errorDiv = document.getElementById('errorMessage');
+    const hasSubscriptionDiv = document.getElementById('hasSubscription');
+    const noSubscriptionDiv = document.getElementById('noSubscription');
+
+    // Проверяем статус подписки при загрузке
+    checkSubscriptionStatus();
+
+    // Обработчик для кнопки подписки
+    if (subscribeBtn) {
+        subscribeBtn.addEventListener('click', async function() {
+            const submitText = document.getElementById('submitText');
+            const spinner = document.getElementById('spinner');
+
+            submitText.textContent = 'Создание платежа...';
+            spinner.style.display = 'inline-block';
+            subscribeBtn.disabled = true;
+            errorDiv.style.display = 'none';
+
+            try {
+                const accessToken = localStorage.getItem('access_token');
+
+                if (!accessToken) {
+                    window.location.href = '{% url "users:login" %}?next={% url "users:subscribe" %}';
+                    return;
+                }
+
+                const response = await fetch('{% url "users:api_payment_create" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + accessToken
+                    }
+                });
+
+                if (response.ok) {
+                    const responseData = await response.json();
+                    window.location.href = responseData.payment_link;
+                } else {
+                    const errorData = await response.json();
+                    let errorMessage = 'Ошибка создания платежа';
+                    if (errorData.error) errorMessage = errorData.error;
+                    if (errorData.detail) errorMessage = errorData.detail;
+
+                    showError(errorMessage);
+                    resetButton();
+                }
+
+            } catch (error) {
+                showError('Ошибка соединения с сервером: ' + error.message);
+                resetButton();
+            }
+        });
+    }
+
+    async function checkSubscriptionStatus() {
+        try {
+            const accessToken = localStorage.getItem('access_token');
+            if (!accessToken) return;
+
+            const response = await fetch('{% url "users:user_profile" %}', {
+                headers: {
+                    'Authorization': 'Bearer ' + accessToken
+                }
+            });
+
+            if (response.ok) {
+                const userData = await response.json();
+                if (userData.has_paid_subscription) {
+                    hasSubscriptionDiv.style.display = 'block';
+                    noSubscriptionDiv.style.display = 'none';
+                }
+            }
+        } catch (error) {
+            console.error('Ошибка проверки подписки:', error);
+        }
+    }
+
+    function showError(message) {
+        errorDiv.textContent = message;
+        errorDiv.style.display = 'block';
+    }
+
+    function resetButton() {
+        const submitText = document.getElementById('submitText');
+        const spinner = document.getElementById('spinner');
+
+        if (submitText) submitText.textContent = 'Оформить подписку';
+        if (spinner) spinner.style.display = 'none';
+        if (subscribeBtn) subscribeBtn.disabled = false;
+    }
+});
+</script>
+{% endblock %}

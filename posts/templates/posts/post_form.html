@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{% if form.instance.pk %}Редактировать пост{% else %}Создать пост{% endif %}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title mb-0">
+                    {% if form.instance.pk %}
+                    <i class="bi bi-pencil"></i> Редактировать пост
+                    {% else %}
+                    <i class="bi bi-plus-circle"></i> Создать новый пост
+                    {% endif %}
+                </h4>
+            </div>
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data" id="post-form">
+                    <!-- Убрали csrf_token -->
+
+                    {% if form.non_field_errors %}
+                    <div class="alert alert-danger">
+                        {% for error in form.non_field_errors %}
+                        <p class="mb-0">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <!-- Заголовок -->
+                    <div class="mb-3">
+                        <label for="{{ form.title.id_for_label }}" class="form-label">
+                            <strong>Заголовок поста *</strong>
+                        </label>
+                        {{ form.title }}
+                        {% if form.title.errors %}
+                        <div class="text-danger small mt-1">
+                            {% for error in form.title.errors %}
+                            {{ error }}<br>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Содержание -->
+                    <div class="mb-3">
+                        <label for="{{ form.content.id_for_label }}" class="form-label">
+                            <strong>Содержание поста *</strong>
+                        </label>
+                        {{ form.content }}
+                        {% if form.content.errors %}
+                        <div class="text-danger small mt-1">
+                            {% for error in form.content.errors %}
+                            {{ error }}<br>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Изображение -->
+                    <div class="mb-3">
+                        <label for="{{ form.image.id_for_label }}" class="form-label">
+                            <strong>Изображение</strong>
+                        </label>
+                        {{ form.image }}
+                        {% if form.image.errors %}
+                        <div class="text-danger small mt-1">
+                            {% for error in form.image.errors %}
+                            {{ error }}<br>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Платный контент -->
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            {{ form.is_paid }}
+                            <label class="form-check-label" for="{{ form.is_paid.id_for_label }}">
+                                <strong>Платный контент</strong>
+                            </label>
+                        </div>
+                        <div class="form-text">
+                            Если включено, пост будет доступен только пользователям с подпиской
+                        </div>
+                        {% if form.is_paid.errors %}
+                        <div class="text-danger small mt-1">
+                            {% for error in form.is_paid.errors %}
+                            {{ error }}<br>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="d-flex gap-2 pt-3">
+                        <button type="submit" class="btn btn-primary">
+                            {% if form.instance.pk %}Сохранить изменения{% else %}Создать пост{% endif %}
+                        </button>
+                        <a href="{% url 'posts:posts_list' %}" class="btn btn-secondary">Отмена</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('post-form');
+    const accessToken = localStorage.getItem('access_token');
+
+    // Проверяем аутентификацию
+    if (!accessToken) {
+        window.location.href = '{% url "users:login" %}?next={{ request.path }}';
+        return;
+    }
+
+    // Обработчик отправки формы
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const formData = new FormData(this);
+
+        try {
+            const response = await fetch(this.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Authorization': 'Bearer ' + accessToken
+                }
+            });
+
+            if (response.status === 401) {
+                localStorage.removeItem('access_token');
+                window.location.href = '{% url "users:login" %}?next={{ request.path }}';
+                return;
+            }
+
+            const data = await response.json();
+
+            if (data.success) {
+                window.location.href = data.redirect_url || '{% url "posts:posts_list" %}';
+            } else {
+                alert('Ошибка: ' + (data.error || JSON.stringify(data.errors)));
+            }
+
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Произошла ошибка при создании поста');
+        }
+    });
+});
+</script>
+{% endblock %}

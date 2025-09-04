@@ -1,0 +1,170 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container">
+  <div class="row justify-content-center">
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header">
+          <h4 class="text-center">Регистрация</h4>
+        </div>
+        <div class="card-body">
+          <form id="registerForm">
+            {% csrf_token %}
+
+            <div class="mb-3">
+              <label for="phone" class="form-label">Телефон *</label>
+              <input type="text" class="form-control" id="phone" name="phone"
+                     placeholder="+79123456789" required>
+              <div class="form-text">Введите номер телефона для входа в систему</div>
+            </div>
+
+            <div class="mb-3">
+              <label for="password" class="form-label">Пароль *</label>
+              <input type="password" class="form-control" id="password" name="password"
+                     placeholder="Не менее 8 символов" required>
+            </div>
+
+            <div class="mb-3">
+              <label for="password_confirm" class="form-label">Подтверждение пароля *</label>
+              <input type="password" class="form-control" id="password_confirm" name="password_confirm"
+                     placeholder="Повторите пароль" required>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100">
+              <span id="submitText">Зарегистрироваться</span>
+              <div id="spinner" class="spinner-border spinner-border-sm" role="status" style="display: none;">
+                <span class="visually-hidden">Загрузка...</span>
+              </div>
+            </button>
+          </form>
+
+          <div class="mt-3 text-center">
+            <p>Уже есть аккаунт? <a href="{% url 'users:login' %}">Войти</a></p>
+          </div>
+
+          <div id="errorMessage" class="alert alert-danger mt-3" style="display: none;"></div>
+          <div id="successMessage" class="alert alert-success mt-3" style="display: none;">
+            Регистрация успешна! Перенаправление...
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.spinner-border {
+    margin-left: 8px;
+}
+</style>
+
+<script>
+// Функция для получения CSRF токена
+function getCSRFToken() {
+    const csrfField = document.querySelector('[name=csrfmiddlewaretoken]');
+    return csrfField ? csrfField.value : '';
+}
+
+document.getElementById('registerForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const submitText = document.getElementById('submitText');
+    const spinner = document.getElementById('spinner');
+    const submitButton = e.target.querySelector('button[type="submit"]');
+    const errorDiv = document.getElementById('errorMessage');
+    const successDiv = document.getElementById('successMessage');
+
+    // Показываем загрузку
+    submitText.textContent = 'Регистрация...';
+    spinner.style.display = 'inline-block';
+    submitButton.disabled = true;
+    errorDiv.style.display = 'none';
+    successDiv.style.display = 'none';
+
+    // Получаем данные формы
+    const formData = {
+        phone: document.getElementById('phone').value.trim(),
+        password: document.getElementById('password').value,
+        password_confirm: document.getElementById('password_confirm').value
+    };
+
+    // Проверка паролей
+    if (formData.password !== formData.password_confirm) {
+        showError('Пароли не совпадают');
+        resetButton();
+        return;
+    }
+
+    try {
+        const csrfToken = getCSRFToken();
+
+        const response = await fetch('{% url "users:api_register" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({
+                phone: formData.phone,
+                password: formData.password
+            })
+        });
+
+        const responseData = await response.json();
+
+        if (response.ok) {
+            // Сохраняем токены
+            localStorage.setItem('access_token', responseData.access);
+            localStorage.setItem('refresh_token', responseData.refresh);
+
+            // Показываем успех
+            successDiv.style.display = 'block';
+
+            // Перенаправляем на главную
+            setTimeout(() => {
+                window.location.href = '{% url "posts:posts_list" %}';
+            }, 1500);
+
+        } else {
+            // Показываем ошибку
+            let errorMessage = 'Ошибка регистрации';
+            if (responseData.detail) errorMessage = responseData.detail;
+            else if (responseData.phone) errorMessage = responseData.phone[0];
+            else if (responseData.password) errorMessage = responseData.password[0];
+            else if (responseData.error) errorMessage = responseData.error;
+
+            showError(errorMessage);
+        }
+
+    } catch (error) {
+        showError('Ошибка соединения с сервером');
+    } finally {
+        resetButton();
+    }
+});
+
+// Функция показа ошибок
+function showError(message) {
+    const errorDiv = document.getElementById('errorMessage');
+    errorDiv.textContent = message;
+    errorDiv.style.display = 'block';
+}
+
+// Сброс кнопки
+function resetButton() {
+    document.getElementById('submitText').textContent = 'Зарегистрироваться';
+    document.getElementById('spinner').style.display = 'none';
+    document.querySelector('button[type="submit"]').disabled = false;
+}
+
+// Обработка Enter
+document.getElementById('password_confirm').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        document.getElementById('registerForm').dispatchEvent(new Event('submit'));
+    }
+});
+</script>
+{% endblock %}

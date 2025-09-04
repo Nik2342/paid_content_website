@@ -1,0 +1,118 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container">
+  <div class="row justify-content-center">
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header">
+          <h4 class="text-center">Вход в систему</h4>
+        </div>
+        <div class="card-body">
+          <form id="loginForm">
+            <div class="mb-3">
+              <label for="phone" class="form-label">Телефон</label>
+              <input type="text" class="form-control" id="phone" name="phone" required
+                     placeholder="+79123456789">
+            </div>
+            <div class="mb-3">
+              <label for="password" class="form-label">Пароль</label>
+              <input type="password" class="form-control" id="password" name="password" required
+                     placeholder="Введите ваш пароль">
+            </div>
+            <button type="submit" class="btn btn-primary w-100">
+              <span id="submitText">Войти</span>
+              <div id="spinner" class="spinner-border spinner-border-sm" role="status" style="display: none;">
+                <span class="visually-hidden">Загрузка...</span>
+              </div>
+            </button>
+          </form>
+
+          <div class="mt-3 text-center">
+            <p>Нет аккаунта? <a href="{% url 'users:register' %}">Зарегистрироваться</a></p>
+          </div>
+
+          <div id="errorMessage" class="alert alert-danger mt-3" style="display: none;"></div>
+          <div id="successMessage" class="alert alert-success mt-3" style="display: none;">
+            Успешный вход! Перенаправление...
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.getElementById('loginForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const submitText = document.getElementById('submitText');
+    const spinner = document.getElementById('spinner');
+    const submitButton = e.target.querySelector('button[type="submit"]');
+    const errorDiv = document.getElementById('errorMessage');
+    const successDiv = document.getElementById('successMessage');
+
+    submitText.textContent = 'Вход...';
+    spinner.style.display = 'inline-block';
+    submitButton.disabled = true;
+    errorDiv.style.display = 'none';
+    successDiv.style.display = 'none';
+
+    const formData = {
+        phone: document.getElementById('phone').value,
+        password: document.getElementById('password').value
+    };
+
+    try {
+        const response = await fetch('{% url "users:api_login" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(formData)
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+
+            // Сохраняем ТОЛЬКО JWT токены (без Django сессии)
+            localStorage.setItem('access_token', data.access);
+            localStorage.setItem('refresh_token', data.refresh);
+
+            successDiv.style.display = 'block';
+
+            // Перенаправляем на главную
+            const urlParams = new URLSearchParams(window.location.search);
+            const nextUrl = urlParams.get('next') || '{% url "posts:posts_list" %}';
+
+            setTimeout(() => {
+                window.location.href = nextUrl;
+            }, 1000);
+
+        } else {
+            const errorData = await response.json();
+            let errorMessage = 'Ошибка входа';
+
+            if (errorData.detail) {
+                errorMessage = errorData.detail;
+            } else if (errorData.error) {
+                errorMessage = errorData.error;
+            }
+
+            errorDiv.textContent = errorMessage;
+            errorDiv.style.display = 'block';
+        }
+
+    } catch (error) {
+        console.error('Ошибка входа:', error);
+        errorDiv.textContent = 'Ошибка соединения с сервером: ' + error.message;
+        errorDiv.style.display = 'block';
+    } finally {
+        submitText.textContent = 'Войти';
+        spinner.style.display = 'none';
+        submitButton.disabled = false;
+    }
+});
+</script>
+{% endblock %}
